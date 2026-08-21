@@ -1,0 +1,11 @@
+# dsh-toolcall-compat bundle patch.
+#
+# This package declares `dsh.bundle.patch` (see package.json), so when the
+# package is added to a profile's `dsh.profile.bundles` (via
+# `dsh plugin --profile <name> add @yukari316/dsh-toolcall-compat`, or the
+# bundled install script), this file is applied as a bundle layer at boot and
+# inserts the plugin row below. No manual edit of the profile's
+# cordis.patch.yml is needed.
+- insert:
+    - id: toolcall-compat
+      name: '@yukari316/dsh-toolcall-compat'

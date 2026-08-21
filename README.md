@@ -5,6 +5,9 @@ DSH 插件，解决第三方模型（GPT 等）用 DSH ToolCall 时的两个问�
 1. 模型在工具调用参数里乱带 `sandbox_permissions` / `justification`，每次重试都撞上同一个校验错误；
 2. 某些工具调用长时间不返回，整个回合卡住，没有跳过的办法。
 
+- npm：https://www.npmjs.com/package/@yukari316/dsh-toolcall-compat
+- 源码：https://github.com/Yukari316/dsh-toolcall-compat
+
 ## 功能一：兼容模式（schema-fix）
 
 DSH 对工具调用的升级参数校验很严格：
@@ -22,11 +25,11 @@ GPT 这类模型经常把这两个字段塞进每一次调用，结果就是每�
   - 合法提权（非空理由 + 目标严格更宽于当前模式）→ 原样保留，走 DSH 正常的用户审批流程；
 - 模式解析不出来时（没有 sandboxPolicy 服务、找不到会话等）→ 保守处理：只剥离畸形和冗余的，不猜。
 
-开关默认开启，在 设置 → 插件配置（Settings → Plugins）里的 ToolCall Compat 卡片。只影响带这两个键的调用，其余参数、调用 ID、工具名原样不动；非 JSON 参数直接放行，不会破坏流。
+开关默认开启。只影响带这两个键的调用，其余参数、调用 ID、工具名原样不动；非 JSON 参数直接放行，不会破坏流。
 
 ## 功能二：跳过卡住的调用（stuck-skip）
 
-Host 侧在 `tools/execute` 外层记录每个 in-flight 调用，把真实派发和"用户跳过"信号做 race。浏览器端自绘了 `tool-call` 节点（`conversation.chat.node` 是单胜者插槽，要在官方卡片上方插提示条只能替换整个渲染器，官方专用视图就看不到了），当某个调用运行超过阈值（默认 15s，可在插件配置里改），卡片上方会出现提示条：
+Host 侧在 `tools/execute` 外层记录每个 in-flight 调用，把真实派发和"用户跳过"信号做 race。浏览器端自绘了 `tool-call` 节点（`conversation.chat.node` 是单胜者插槽，要在官方卡片上方插提示条只能替换整个渲染器，官方专用视图就看不到了），当某个调用运行超过阈值（默认 15s），卡片上方会出现提示条：
 
 > ⚠ 工具调用长时间未响应：bash（已运行 42s）[跳过]
 
@@ -42,41 +45,64 @@ Host 侧在 `tools/execute` 外层记录每个 in-flight 调用，把真实派�
 
 ## 安装
 
-### 构建
+装好 DSH 之后，一条命令搞定，不用改任何配置文件。
 
-```bash
-npm install
-npm run build   # tsc → lib/
-npm test        # 契约测试（node --test）
+### 方式一：官方命令（需要 pnpm）
+
+```powershell
+dsh plugin --profile web add @yukari316/dsh-toolcall-compat
 ```
 
-### 装进 DSH（web profile）
+### 方式二：没有 pnpm，用 npm
 
-1. 让 DSH 能从 profile 目录解析到本包。两种方式：
+```powershell
+npx -y @yukari316/dsh-toolcall-compat
+```
 
-   ```powershell
-   # 方式 A：官方命令（需要装 pnpm）
-   dsh plugin --profile web add C:\path\to\dsh-toolcall-compat
+这个命令会：把包装进 web profile 的 `node_modules`、自动在 profile 的 `dsh.profile.bundles` 里注册插件（重复执行不会重复注册）、提示你重启。想装到别的 profile 就加 `--profile <名字>`。
 
-   # 方式 B：手动把构建好的包放进 profile 的 node_modules
-   # loader 从 $DSH_HOME\profiles\web 向上找 node_modules，放到
-   # $DSH_HOME\profiles\node_modules\@yukari316\dsh-toolcall-compat 即可
-   # （连同 lib\、package.json、README.md、LICENSE）
-   ```
+### 装完
 
-2. 在 `$DSH_HOME\profiles\web\cordis.patch.yml` 里加一行：
+```powershell
+dsh web
+```
 
-   ```yaml
-   - insert:
-       - id: toolcall-compat
-         name: '@yukari316/dsh-toolcall-compat'
-   ```
+插件默认开启，不用额外设置。想改默认值，见下面的「设置项」。
 
-3. 重启 `dsh web`，到 设置 → 插件配置 应该能看到 ToolCall Compat 卡片。
+### 怎么确认生效
 
-### 浏览器半部说明（重要）
+让模型（比如 GPT）执行一次会触发沙箱权限的工具调用：
 
-Host 半部（兼容模式 + 跳过服务）按上面装好就能跑。浏览器 UI 半部会被自动发现（package.json 里的 `dsh.client` 声明 + `./client` 导出），但浏览器加载的是包里 `lib/client.js` 的原始文件，它必须是 `window.__ModuleLoader__.load({id, factory})` 的 factory 格式。官方的 `clientBundle` 构建预设没有随 npm 包发布（在 DSH 源码仓库 `packages/client/tsdown.client.ts` 里），仓库外的插件得自己复刻这个构建。当前 `npm run build` 只做 tsc，产出的普通 ESM 浏览器模块系统无法注册，所以**静态安装目前只有 Host 半部生效**；浏览器 UI 是在会话内通过动态插件验证的。
+- 不再报 `invalid justification` / `sandbox escalation ... not strictly wider`，说明兼容模式在工作；
+- 装了插件前后的调用日志里，带 `sandbox_permissions` / `justification` 的调用数量会明显减少。
+
+### 更新 / 卸载
+
+更新：
+
+```powershell
+dsh plugin --profile web update @yukari316/dsh-toolcall-compat   # pnpm
+# 或者
+npx -y @yukari316/dsh-toolcall-compat                            # npm，重复执行即更新
+```
+
+卸载：从 profile 的 `package.json` 里删掉 `dsh.profile.bundles` 中的 `@yukari316/dsh-toolcall-compat` 和 `dependencies` 里的对应项，再重启 `dsh web`。
+
+> 为什么以前要两步（装包 + 手改 `cordis.patch.yml`）？DSH 只启动组合配置里列出来的插件，`npm install` 只是把代码放进磁盘。这个包现在声明了 `dsh.bundle`，自带启用 patch（`cordis.patch.yml`），`dsh plugin add` / 上面的 npx 命令会自动完成注册，所以不需要再手动加行。
+
+## 装完之后：哪些能用，哪些暂时不能用
+
+这个插件由两部分组成：
+
+- **服务端部分**：跑在 DSH 进程里，负责修正工具调用参数、跟踪和跳过卡住的调用。这部分装上就能用。
+- **浏览器部分**：网页里的界面——设置卡片（设置 → 插件配置 里的 ToolCall Compat）、工具调用卡片上的「跳过」按钮和 `compat bypass` 徽标。
+
+当前发布版本的情况：
+
+- ✅ **服务端部分完整可用。** 兼容模式默认开启，装好重启后就开始起作用，GPT 的调用不再反复报参数校验错。
+- ⏳ **浏览器部分暂时不会显示。** DSH 的浏览器插件必须用一种特殊格式打包（官方构建工具没有随 npm 发布），普通 TypeScript 编译出来的文件浏览器加载不了，所以设置卡片、跳过按钮、`compat bypass` 徽标这些界面暂时看不到。这部分目前是在开发环境里通过会话内的动态插件验证的，等构建方式补齐后会随版本发布。
+
+一句话总结：如果你的目的是「让 GPT 别再反复报参数校验错误」，现在装上就能用；想要设置界面和跳过按钮，需要等后续版本。
 
 ## 设置项
 
@@ -86,9 +112,22 @@ Host 半部（兼容模式 + 跳过服务）按上面装好就能跑。浏览器
 | `renderEscapes` | `true` | 展开卡片时把转义序列显示成字符 |
 | `stuckAfterMs` | `15000` | 调用运行超过多久才提示可跳过（1–600s） |
 
-## 卸载
+设置界面尚未随包发布。想改默认值，可以在 `$DSH_HOME\settings.yaml` 里加一段：
 
-把 `cordis.patch.yml` 里的行删掉，移除 profile node_modules 里的包，重启即可。设置项没有独立开关的：兼容模式可以在插件配置里关掉；跳过功能只在有调用超过阈值时出现提示条，且只影响你点「跳过」的那一个调用。
+```yaml
+toolcall-compat:
+  enabled: true
+  renderEscapes: true
+  stuckAfterMs: 15000
+```
+
+## 从源码构建（开发者）
+
+```bash
+npm install
+npm run build   # tsc → lib/
+npm test        # 契约测试
+```
 
 ## License
 

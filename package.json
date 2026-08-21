@@ -1,6 +1,6 @@
 {
   "name": "@yukari316/dsh-toolcall-compat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH tool-call compatibility: strips sandbox_permissions/justification from tool-call arguments for third-party models (GPT etc.), and lets the user skip possibly-stuck tool calls with an LLM-facing notice.",
   "keywords": [
     "dsh",
@@ -30,9 +30,14 @@
   "files": [
     "lib",
     "src",
+    "scripts",
+    "cordis.patch.yml",
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "dsh-toolcall-compat": "./scripts/install.mjs"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
@@ -40,6 +45,9 @@
     "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\""
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
