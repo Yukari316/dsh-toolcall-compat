@@ -86,7 +86,7 @@ toolcall-compat:
   stuckAfterMs: 15000
 ```
 
-## 从源码构建（开发者）
+## 从源码构建
 
 ```bash
 npm install
