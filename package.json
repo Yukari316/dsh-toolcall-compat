@@ -1,6 +1,6 @@
 {
   "name": "@yukari316/dsh-toolcall-compat",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "DSH tool-call compatibility: strips sandbox_permissions/justification from tool-call arguments for third-party models (GPT etc.), and lets the user skip possibly-stuck tool calls with an LLM-facing notice.",
   "keywords": [
     "dsh",

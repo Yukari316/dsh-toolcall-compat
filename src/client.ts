@@ -624,10 +624,10 @@ export function apply(ctx: Context) {
       name: 'conversation.chat.node',
       key: 'tool-call',
       locale: LOCALE_NS,
-      // Keep the shipped child seat declared: replacing the keyed occupant
-      // without re-declaring its children collapses `tool.call.toolview`,
-      // which breaks every official per-tool card (and the renderer).
-      children: { 'tool.call.toolview': { kind: 'keyed', scope: 'session' } },
+      // Shadow the built-in dsh-client-ui-tool entry (priority 0).
+      // Lowest priority wins; do not re-declare children — the shadowed
+      // parent already owns `tool.call.toolview`.
+      priority: -1,
     },
     (props: ToolCallNodeProps & { t?: Translate }) => React.createElement(EnhancedToolCallTree, { ...props, skipCall }),
   ))
