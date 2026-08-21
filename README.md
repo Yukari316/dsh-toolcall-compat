@@ -1,6 +1,6 @@
 # dsh-toolcall-compat
 
-> 注意！这是大肥鱼100%纯vibe出来的插件，没有人类了
+> 注意！这是大肥鱼100%纯vibe出来的插件，没有人类了，因为我不会写ts和前端（
 
 DSH 插件，解决第三方模型（GPT 等）用 DSH ToolCall 时的两个问题：
 
