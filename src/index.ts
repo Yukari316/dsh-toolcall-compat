@@ -244,7 +244,11 @@ export async function skipAwareDispatch(
 ): Promise<ToolExecutionResult> {
   const entry = trackInflight(control, exec)
   const upstream = exec.signal
-  exec.signal = AbortSignal.any([upstream, entry.controller.signal])
+  // `exec.signal` is required by contract, but a wrapper must never throw
+  // before the tool body (a thrown wrapper fails EVERY dispatch). Fall back
+  // to a fresh signal when it is absent.
+  const upstreamSignal = upstream ?? new AbortController().signal
+  exec.signal = AbortSignal.any([upstreamSignal, entry.controller.signal])
   try {
     const settled = await Promise.race([
       next().then((result) => ({ kind: 'result' as const, result })),
@@ -283,12 +287,20 @@ export function apply(ctx: Context) {
   // 1. Schema fix: judge each tool-call block's escalation pair against the
   //    stream's effective sandbox mode — strip malformed or redundant pairs,
   //    keep legitimate wider escalations (they run the normal approval flow).
+  //    The listener must NEVER throw: a thrown waterfall listener breaks the
+  //    model stream (the UI would hang on "deep diving" forever). Any error
+  //    falls back to the untouched downstream stream.
   ctx.on('llm/stream', (options: GenerateOptions, next: () => AsyncIterable<StreamChunk>) => {
-    const settings = ctx.get('settings')
-    const section = settings?.get(NS) as { enabled?: boolean } | undefined
-    const enabled = section?.enabled ?? true
-    if (!enabled) return next()
-    return rewriteToolCallChunks(next(), resolveEffectiveMode(ctx, options), (callId) => control.markStripped(callId))
+    try {
+      const settings = ctx.get('settings')
+      const section = settings?.get(NS) as { enabled?: boolean } | undefined
+      const enabled = section?.enabled ?? true
+      if (!enabled) return next()
+      return rewriteToolCallChunks(next(), resolveEffectiveMode(ctx, options), (callId) => control.markStripped(callId))
+    } catch (error) {
+      ctx.logger.warn(`dsh-toolcall-compat: llm/stream wrapper failed, passing stream through: ${String(error)}`)
+      return next()
+    }
   })
 
   // 2. Stuck-call skip: track every in-flight call and race dispatch against

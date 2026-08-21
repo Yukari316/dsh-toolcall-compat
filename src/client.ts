@@ -158,6 +158,14 @@ export function SettingsSwitchRow(props: {
 }): React.ReactElement {
   const { scope, field, title, desc } = props
   const [ready, setReady] = React.useState(false)
+  if (scope === undefined || scope === null) {
+    return React.createElement('div', { className: 'tcstrip-row' },
+      React.createElement('div', { className: 'tcstrip-row-text' },
+        React.createElement('div', { className: 'tcstrip-row-title' }, title),
+        React.createElement('div', { className: 'tcstrip-row-desc' }, desc),
+      ),
+    )
+  }
   // Bind the scope methods: useSyncExternalStore invokes them as bare
   // functions, where `this` would be lost.
   const subscribe = React.useCallback((callback: () => void) => scope.subscribe(callback), [scope])
@@ -234,6 +242,14 @@ export function ToolCallCard(props: { toolName: string; block: ToolCallBlock; re
   const { toolName, block, renderEscapes, bypassed, t } = props
   const [argExpanded, setArgExpanded] = React.useState(false)
   const [outExpanded, setOutExpanded] = React.useState(false)
+  if (block === undefined || block === null) {
+    return React.createElement('div', { className: 'tcskip-card' },
+      React.createElement('div', { className: 'tcskip-card-head' },
+        React.createElement('span', { className: 'tcskip-icon' }, toolIcon(toolName)),
+        React.createElement('span', { className: 'tcskip-card-title' }, toolName || '(unnamed)'),
+      ),
+    )
+  }
   const running = !('kind' in block)
   const args = running ? (block.argsRaw ?? '') : ((block.call && block.call.argsRaw) ?? '')
   const out = running ? null : blockText(block.content)
@@ -299,10 +315,17 @@ export function ToolCallCard(props: { toolName: string; block: ToolCallBlock; re
  */
 export function EnhancedToolCallTree(props: ToolCallNodeProps & { skipCall: (callId: string) => void; t?: Translate }): React.ReactElement {
   const { node, selectedCallId, inspectCall, skipCall } = props
+  // Hooks first, unconditionally (React forbids conditional hook order).
   const t: Translate = props.t ?? ((key: keyof typeof zh) => zh[key])
   const stuck = React.useSyncExternalStore(stuckSubscribe, stuckGetSnapshot)
   const bypassed = React.useSyncExternalStore(bypassSubscribe, bypassGetSnapshot)
   const settings = React.useSyncExternalStore(settingsSubscribe, settingsGetSnapshot)
+  // The owner routes `node` from the session snapshot; a node that has not
+  // been built yet must render nothing (the shipped ChatNodeSeat does the
+  // same), never throw on `node.data.root`.
+  if (node === undefined || node === null || node.data === undefined || node.data.root === undefined) {
+    return React.createElement(React.Fragment, null)
+  }
   const renderEscapes = settings.status === 'ready' && settings.value !== undefined
     ? settings.value.renderEscapes !== false
     : true
@@ -393,6 +416,7 @@ function settingsGetSnapshot(): SettingsScopeSnapshot<ToolcallSettings> {
  */
 export function StuckThresholdRow(props: { scope: SettingsScope<ToolcallSettings>; t: Translate }): React.ReactElement {
   const { scope, t } = props
+  // Hooks first, unconditionally.
   const subscribe = React.useCallback((callback: () => void) => scope.subscribe(callback), [scope])
   const getSnapshot = React.useCallback(() => scope.getSnapshot(), [scope])
   const snapshot = React.useSyncExternalStore(subscribe, getSnapshot)
@@ -404,6 +428,14 @@ export function StuckThresholdRow(props: { scope: SettingsScope<ToolcallSettings
   React.useEffect(() => {
     setText(String(seconds))
   }, [seconds])
+  if (scope === undefined || scope === null) {
+    return React.createElement('div', { className: 'tcstrip-row tcstrip-row-bare' },
+      React.createElement('div', { className: 'tcstrip-row-text' },
+        React.createElement('div', { className: 'tcstrip-row-title' }, t('thresholdTitle')),
+        React.createElement('div', { className: 'tcstrip-row-desc' }, t('thresholdDesc')),
+      ),
+    )
+  }
   const commit = () => {
     const parsed = Number(text)
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 600) {
@@ -446,6 +478,18 @@ export function StuckThresholdRow(props: { scope: SettingsScope<ToolcallSettings
 export function PluginConfigCard(props: { scope: SettingsScope<ToolcallSettings>; t: Translate }): React.ReactElement {
   const { scope, t } = props
   const [open, setOpen] = React.useState(false)
+  // The scope arrives through the slot's `inject`; guard against a render
+  // before it is bound (a missing scope must render the header only).
+  if (scope === undefined || scope === null) {
+    return React.createElement('li', { className: 'tcpc-card' },
+      React.createElement('div', { className: 'tcpc-header' },
+        React.createElement('div', { className: 'tcpc-head-text' },
+          React.createElement('div', { className: 'tcpc-name' }, 'ToolCall Compat'),
+          React.createElement('div', { className: 'tcpc-desc' }, t('cardDesc')),
+        ),
+      ),
+    )
+  }
   return React.createElement('li', { className: 'tcpc-card' + (open ? ' tcpc-card-open' : '') },
     React.createElement('button', {
       type: 'button',
@@ -516,24 +560,39 @@ export function apply(ctx: Context) {
   }
 
   // Settings: the plugin-configuration card (keyed by the settings namespace).
+  // The scope is delivered as an owner prop through `inject` (the same pattern
+  // the shipped settings cards use); the `scope` registration field is the
+  // slot-scope declaration, not a component prop.
   const binder = ctx.get('settingsScope') as SettingsScopeBinder | undefined
   if (binder !== undefined) {
     const scope = binder.bind<ToolcallSettings>({ namespace: SETTINGS_NS })
     boundScope = scope
     ctx.slots.inject('settings.plugin.item', () => ctx.slots.register(
-      { name: 'settings.plugin.item', key: SETTINGS_NS, scope, locale: LOCALE_NS },
+      { name: 'settings.plugin.item', key: SETTINGS_NS, locale: LOCALE_NS, inject: () => ({ scope }) },
       PluginConfigCard,
     ))
+  }
+
+  // The tool-call tree MUST be registered even when the Host Remote is
+  // unavailable (it replaces the shipped renderer; without it the official
+  // tool cards are shadowed by nothing). Skip then degrades to a no-op.
+  let skipCall: (callId: string) => void = (callId) => {
+    void callId
   }
 
   // Stuck-call support; degrade gracefully when the Host Remote is unavailable.
   const remote = ctx.get('remote') as { toolcallControl?: ToolcallControlRemote } | undefined
   const control = remote?.toolcallControl
-  if (control === undefined) return
+  if (control !== undefined) {
+    skipCall = (callId: string) => {
+      control.skip({ callId }).catch(() => {})
+    }
+  }
 
   // Shared poller: refresh the stuck map, the bypass set, and notify
   // subscribers. The unresponsive threshold comes from the settings scope.
   const poll = async () => {
+    if (control === undefined) return
     try {
       const snapshot = boundScope === null ? null : boundScope.getSnapshot()
       const sinceMs = snapshot !== null && snapshot.status === 'ready' && typeof snapshot.value?.stuckAfterMs === 'number'
@@ -560,12 +619,16 @@ export function apply(ctx: Context) {
     stuckListeners.clear()
   })
 
-  const skipCall = (callId: string) => {
-    control.skip({ callId }).catch(() => {})
-  }
-
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'tool-call', locale: LOCALE_NS },
+    {
+      name: 'conversation.chat.node',
+      key: 'tool-call',
+      locale: LOCALE_NS,
+      // Keep the shipped child seat declared: replacing the keyed occupant
+      // without re-declaring its children collapses `tool.call.toolview`,
+      // which breaks every official per-tool card (and the renderer).
+      children: { 'tool.call.toolview': { kind: 'keyed', scope: 'session' } },
+    },
     (props: ToolCallNodeProps & { t?: Translate }) => React.createElement(EnhancedToolCallTree, { ...props, skipCall }),
   ))
 }
