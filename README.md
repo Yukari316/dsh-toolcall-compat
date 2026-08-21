@@ -1,5 +1,7 @@
 # dsh-toolcall-compat
 
+> 注意！这是大肥鱼100%纯vibe出来的插件，没有人类了
+
 DSH 插件，解决第三方模型（GPT 等）用 DSH ToolCall 时的两个问题：
 
 1. 模型在工具调用参数里乱带 `sandbox_permissions` / `justification`，每次重试都撞上同一个校验错误；
