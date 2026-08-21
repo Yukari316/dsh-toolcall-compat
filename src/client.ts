@@ -570,4 +570,7 @@ export function apply(ctx: Context) {
   ))
 }
 
-export default apply
+// No `export default` here on purpose: DSH's client loader unwraps module
+// exports via `exports.default ?? exports` and would then return the bare
+// apply function, dropping the `inject` list. Shipped client bundles export
+// named `apply`/`inject` only.

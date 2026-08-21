@@ -92,19 +92,12 @@ npx -y @yukari316/dsh-toolcall-compat                            # npm，重复�
 
 > 为什么以前要两步（装包 + 手改 `cordis.patch.yml`）？DSH 只启动组合配置里列出来的插件，`npm install` 只是把代码放进磁盘。这个包现在声明了 `dsh.bundle`，自带启用 patch（`cordis.patch.yml`），`dsh plugin add` / 上面的 npx 命令会自动完成注册，所以不需要再手动加行。
 
-## 装完之后：哪些能用，哪些暂时不能用
+## 装完之后：能用的部分
 
-这个插件由两部分组成：
+这个插件由两部分组成，0.1.2 起两部分都随包发布：
 
-- **服务端部分**：跑在 DSH 进程里，负责修正工具调用参数、跟踪和跳过卡住的调用。这部分装上就能用。
-- **浏览器部分**：网页里的界面——设置卡片（设置 → 插件配置 里的 ToolCall Compat）、工具调用卡片上的「跳过」按钮和 `compat bypass` 徽标。
-
-当前发布版本的情况：
-
-- ✅ **服务端部分完整可用。** 兼容模式默认开启，装好重启后就开始起作用，GPT 的调用不再反复报参数校验错。
-- ⏳ **浏览器部分暂时不会显示。** DSH 的浏览器插件必须用一种特殊格式打包（官方构建工具没有随 npm 发布），普通 TypeScript 编译出来的文件浏览器加载不了，所以设置卡片、跳过按钮、`compat bypass` 徽标这些界面暂时看不到。这部分目前是在开发环境里通过会话内的动态插件验证的，等构建方式补齐后会随版本发布。
-
-一句话总结：如果你的目的是「让 GPT 别再反复报参数校验错误」，现在装上就能用；想要设置界面和跳过按钮，需要等后续版本。
+- **服务端部分**：跑在 DSH 进程里，负责修正工具调用参数、跟踪和跳过卡住的调用。兼容模式默认开启，装好重启后就开始起作用。
+- **浏览器部分**：网页里的界面——设置卡片（设置 → 插件配置 里的 ToolCall Compat）、工具调用卡片上的「跳过」按钮和 `compat bypass` 徽标。这部分打包成 DSH 浏览器模块系统要求的格式随包发布，安装后即可加载。
 
 ## 设置项
 
@@ -114,7 +107,7 @@ npx -y @yukari316/dsh-toolcall-compat                            # npm，重复�
 | `renderEscapes` | `true` | 展开卡片时把转义序列显示成字符 |
 | `stuckAfterMs` | `15000` | 调用运行超过多久才提示可跳过（1–600s） |
 
-设置界面尚未随包发布。想改默认值，可以在 `$DSH_HOME\settings.yaml` 里加一段：
+设置界面随包发布。想改默认值，可以在 `$DSH_HOME\settings.yaml` 里加一段：
 
 ```yaml
 toolcall-compat:
@@ -127,9 +120,11 @@ toolcall-compat:
 
 ```bash
 npm install
-npm run build   # tsc → lib/
+npm run build   # tsc → lib/，再把 client 半部打成 DSH 浏览器 bundle
 npm test        # 契约测试
 ```
+
+`npm publish` 前会自动重新构建（`prepack`）。
 
 ## License
 
